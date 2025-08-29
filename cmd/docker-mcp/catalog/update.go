@@ -6,7 +6,39 @@ import (
 	"fmt"
 	"os"
 	"time"
+	
+	"github.com/docker/mcp-gateway/cmd/docker-mcp/internal/desktop"
 )
+
+func resolveCatalogURL(ctx context.Context, name string, originalURL string) (string, error) {
+	if name != DockerCatalogName {
+		return originalURL, nil
+	}
+
+	userInfo, err := desktop.GetLoggedInUserInfo(ctx)
+	if err != nil {
+		return DockerCatalogURL, nil
+	}
+
+	// Check if user has organizations
+	if len(userInfo.Organizations) > 0 {
+		// Use the first available organization
+		// Requires some product logic to account for the case where the user
+		// is a member of multiple organizations
+		primaryOrg := userInfo.Organizations[0]
+		// TODO: This needs to be a service call to get the catalog for the
+		// organization
+		// The following URL will give a 404, and it is expected for now
+		// It is for demonstration purposes only
+		orgCatalogURL := fmt.Sprintf(
+			"https://desktop.docker.com/mcp/catalog/v2/catalog-%s.yaml",
+			primaryOrg,
+		)
+		return orgCatalogURL, nil
+	}
+
+	return DockerCatalogURL, nil
+}
 
 func Update(ctx context.Context, args []string) error {
 	cfg, err := ReadConfig()
@@ -54,9 +86,16 @@ func updateCatalog(ctx context.Context, name string, catalog Catalog) error {
 		catalogContent []byte
 		err            error
 	)
-	// For the docker catalog, use the default URL if none is set
-	if name == DockerCatalogName && (url == "" || !isValidURL(url)) {
-		url = DockerCatalogURL
+
+	// For the docker catalog, resolve the appropriate URL based on auth
+	if name == DockerCatalogName {
+		resolvedURL, err := resolveCatalogURL(ctx, name, url)
+		if err != nil {
+			url = DockerCatalogURL
+		} else {
+			url = resolvedURL
+		}
+		
 	}
 	
 	if isValidURL(url) {
@@ -82,7 +121,11 @@ func updateCatalog(ctx context.Context, name string, catalog Catalog) error {
 	}
 
 	if err := WriteCatalogFile(name, catalogContent); err != nil {
-		return fmt.Errorf("failed to write catalog %q: %w", name, err)
+		return fmt.Errorf(
+			"failed to write catalog %q: %w",
+			name,
+			err,
+		)
 	}
 	return nil
 }

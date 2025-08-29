@@ -10,7 +10,28 @@ import (
 	"time"
 )
 
+type LoggedInUser struct {
+	Email         string   `json:"email"`
+	ID            string   `json:"id"`
+	Organizations []string `json:"organizations"`
+}
+
 var ClientBackend = newRawClient(dialBackend)
+
+func GetLoggedInUserInfo(ctx context.Context) (*LoggedInUser, error) {
+	var userInfo LoggedInUser
+	err := ClientBackend.Get(ctx, "/registry/info", &userInfo)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Return nil if email or ID are empty (user not properly authenticated)
+	if userInfo.Email == "" || userInfo.ID == "" {
+		return nil, nil
+	}
+	
+	return &userInfo, nil
+}
 
 func AvoidResourceSaverMode(ctx context.Context) {
 	_ = ClientBackend.Post(ctx, "/idle/make-busy", nil, nil)
