@@ -97,7 +97,7 @@ func updateCatalog(ctx context.Context, name string, catalog Catalog) error {
 		}
 		
 	}
-	
+
 	if isValidURL(url) {
 		catalogContent, err = DownloadFile(ctx, url)
 	} else {
